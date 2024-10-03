@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CO2 Emissions Reduction Simulator</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.1/chart.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .input-group {
+            margin-bottom: 10px;
+        }
+        label {
+            display: inline-block;
+            width: 250px;
+        }
+        input {
+            width: 100px;
+        }
+        .image-placeholder {
+            width: 100%;
+            height: 300px;
+            background-color: #f0f0f0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 20px;
+            font-size: 24px;
+            color: #888;
+            border: 2px dashed #ccc;
+        }
+        .chart-container {
+            margin-bottom: 30px;
+        }
+    </style>
+</head>
+<body>
+    <img src="carbon-budget.png" alt="Description of the image" style="width: 100%; height: auto; margin-bottom: 20px;">
+        Large Image Placeholder
+    </div>
+    
+    <h1>CO2 Emissions Reduction Simulator</h1>
+    <div class="input-group">
+        <label for="carbonBudget">Carbon Budget (Gt CO2):</label>
+        <input type="number" id="carbonBudget" value="250" min="0">
+    </div>
+    <div class="input-group">
+        <label for="startingEmissions">Starting Annual Emissions (Gt CO2/year):</label>
+        <input type="number" id="startingEmissions" value="37" min="0">
+    </div>
+    <div class="input-group">
+        <label for="reductionRateInitial">Initial Reduction Rate for 2025 (%/year):</label>
+        <input type="number" id="reductionRateInitial" value="1" min="-100" max="100" step="1">
+    </div>
+    <div class="input-group">
+        <label for="reductionRate2030">Reduction Rate from 2030 (%/year):</label>
+        <input type="number" id="reductionRate2030" value="2" min="-100" max="100" step="1">
+    </div>
+    <div class="input-group">
+        <label for="reductionRate2040">Reduction Rate from 2040 (%/year):</label>
+        <input type="number" id="reductionRate2040" value="4" min="-100" max="100" step="1">
+    </div>
+    <button onclick="updateCharts()">Update Charts</button>
+    
+    <div class="chart-container">
+        <h2>Remaining Carbon Budget</h2>
+        <canvas id="budgetChart" width="400" height="200"></canvas>
+    </div>
+    
+    <div class="chart-container">
+        <h2>Annual CO2 Emissions</h2>
+        <canvas id="emissionsChart" width="400" height="200"></canvas>
+    </div>
+
+    <script>
+        let budgetChart, emissionsChart;
+
+        function calculateEmissions(carbonBudget, startingEmissions, rateInitial, rate2030, rate2040) {
+            const budgetData = [];
+            const emissionsData = [];
+            let currentBudget = carbonBudget;
+            let currentEmissions = startingEmissions;
+
+            for (let year = 2024; year <= 2100; year++) {
+                budgetData.push({x: year, y: currentBudget});
+                emissionsData.push({x: year, y: currentEmissions});
+                
+                currentBudget -= currentEmissions;
+
+                if (year >= 2040) {
+                    currentEmissions *= (1 - rate2040 / 100);
+                } else if (year >= 2030) {
+                    currentEmissions *= (1 - rate2030 / 100);
+                } else if (year > 2024) {
+                    currentEmissions *= (1 - rateInitial / 100);
+                }
+            }
+
+            return { budgetData, emissionsData };
+        }
+
+        function updateCharts() {
+            const carbonBudget = parseFloat(document.getElementById('carbonBudget').value);
+            const startingEmissions = parseFloat(document.getElementById('startingEmissions').value);
+            const reductionRateInitial = parseFloat(document.getElementById('reductionRateInitial').value);
+            const reductionRate2030 = parseFloat(document.getElementById('reductionRate2030').value);
+            const reductionRate2040 = parseFloat(document.getElementById('reductionRate2040').value);
+
+            const { budgetData, emissionsData } = calculateEmissions(carbonBudget, startingEmissions, reductionRateInitial, reductionRate2030, reductionRate2040);
+
+            if (budgetChart) budgetChart.destroy();
+            if (emissionsChart) emissionsChart.destroy();
+
+            const budgetCtx = document.getElementById('budgetChart').getContext('2d');
+            const emissionsCtx = document.getElementById('emissionsChart').getContext('2d');
+            
+            const minBudget = Math.min(...budgetData.map(point => point.y));
+            const maxEmissions = Math.max(...emissionsData.map(point => point.y));
+            
+            budgetChart = new Chart(budgetCtx, {
+                type: 'line',
+                data: {
+                    labels: budgetData.map(point => point.x),
+                    datasets: [{
+                        label: 'Remaining Carbon Budget',
+                        data: budgetData.map(point => point.y),
+                        borderColor: 'blue',
+                        fill: true,
+                        segment: {
+                            backgroundColor: function(context) {
+                                const value = context.p1.parsed.y;
+                                return value >= 0 ? 'rgba(0, 255, 0, 0.5)' : 'rgba(255, 0, 0, 0.5)';
+                            }
+                        }
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        x: {
+                            type: 'linear',
+                            title: { display: true, text: 'Year' }
+                        },
+                        y: {
+                            type: 'linear',
+                            title: { display: true, text: 'Remaining Carbon Budget (Gt CO2)' },
+                            min: minBudget >= 0 ? 0 : undefined,
+                            suggestedMin: minBudget < 0 ? minBudget : undefined
+                        }
+                    }
+                }
+            });
+
+            emissionsChart = new Chart(emissionsCtx, {
+                type: 'line',
+                data: {
+                    labels: emissionsData.map(point => point.x),
+                    datasets: [{
+                        label: 'Annual CO2 Emissions',
+                        data: emissionsData.map(point => point.y),
+                        borderColor: 'orange',
+                        backgroundColor: 'rgba(255, 165, 0, 0.5)'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        x: {
+                            type: 'linear',
+                            title: { display: true, text: 'Year' }
+                        },
+                        y: {
+                            type: 'linear',
+                            title: { display: true, text: 'Annual Emissions (Gt CO2/year)' },
+                            min: 0,
+                            suggestedMax: maxEmissions
+                        }
+                    }
+                }
+            });
+        }
+
+        updateCharts();
+    </script>
+</body>
+</html>
